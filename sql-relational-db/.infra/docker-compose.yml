@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rdb-bootcamp-postgres
+    environment:
+      POSTGRES_USER: bootcamp
+      POSTGRES_PASSWORD: bootcamp
+      POSTGRES_DB: bootcamp
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bootcamp -d bootcamp']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    container_name: rdb-bootcamp-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: bootcamp
+      MYSQL_PASSWORD: bootcamp
+      MYSQL_DATABASE: bootcamp
+    ports:
+      - '3306:3306'
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --log-bin-trust-function-creators=1
+    volumes:
+      - mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-uroot', '-proot']
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  pgdata:
+  mysqldata:
