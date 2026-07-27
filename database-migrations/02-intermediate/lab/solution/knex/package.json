@@ -1,0 +1,9 @@
+{
+  "name": "nimbus-knex-lab",
+  "private": true,
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "knex": "^3.1.0",
+    "pg": "^8.13.0"
+  }
+}

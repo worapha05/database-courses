@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model UserStatus {
+  id     Int    @id @default(autoincrement())
+  code   String @unique @db.VarChar(32)
+  label  String
+  users  User[]
+
+  @@map("user_statuses")
+}
+
+model User {
+  id          Int        @id @default(autoincrement())
+  firstName   String     @map("first_name")
+  lastName    String     @map("last_name")
+  email       String     @unique
+  phone       String?
+  statusId    Int        @map("status_id")
+  status      UserStatus @relation(fields: [statusId], references: [id])
+  avatarUrl   String?    @map("avatar_url")
+  lastLoginAt DateTime?  @map("last_login_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  @@map("users")
+}

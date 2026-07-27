@@ -1,0 +1,55 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-accounts
+      author: aurora.dba
+      context: dev,staging,prod
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            tableExists:
+              tableName: accounts
+      changes:
+        - createTable:
+            tableName: accounts
+            columns:
+              - column:
+                  name: id
+                  type: BIGSERIAL
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: email
+                  type: TEXT
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: full_name
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: billing_address
+                  type: TEXT
+              - column:
+                  name: billing_city
+                  type: TEXT
+              - column:
+                  name: billing_country
+                  type: CHAR(2)
+              - column:
+                  name: balance_cents
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+      rollback:
+        - dropTable:
+            tableName: accounts

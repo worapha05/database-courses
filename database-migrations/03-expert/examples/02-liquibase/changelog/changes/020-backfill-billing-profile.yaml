@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: 020-backfill-billing-profile
+      author: aurora.dba
+      context: staging,prod
+      comment: Data migration — copy billing_* into profile table (idempotent)
+      preConditions:
+        - onFail: HALT
+        - tableExists:
+            tableName: account_billing_profiles
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO account_billing_profiles (account_id, address, city, country, updated_at)
+              SELECT id, billing_address, billing_city, billing_country, NOW()
+              FROM accounts
+              WHERE NOT EXISTS (
+                SELECT 1 FROM account_billing_profiles p WHERE p.account_id = accounts.id
+              );
+      rollback:
+        - sql:
+            sql: DELETE FROM account_billing_profiles;

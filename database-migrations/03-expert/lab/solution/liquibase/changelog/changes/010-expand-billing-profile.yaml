@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: lab-010-expand-billing-profile
+      author: aurora.ledger
+      labels: expand
+      context: staging,prod
+      preConditions:
+        - onFail: MARK_RAN
+        - not:
+            tableExists:
+              tableName: account_billing_profiles
+      changes:
+        - createTable:
+            tableName: account_billing_profiles
+            columns:
+              - column:
+                  name: account_id
+                  type: BIGINT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: address
+                  type: TEXT
+              - column:
+                  name: city
+                  type: TEXT
+              - column:
+                  name: country
+                  type: CHAR(2)
+              - column:
+                  name: updated_at
+                  type: TIMESTAMPTZ
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            constraintName: fk_lab_billing_profiles_account
+            baseTableName: account_billing_profiles
+            baseColumnNames: account_id
+            referencedTableName: accounts
+            referencedColumnNames: id
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: account_billing_profiles

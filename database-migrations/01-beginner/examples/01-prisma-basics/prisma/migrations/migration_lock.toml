@@ -1,0 +1,2 @@
+# Prisma Migrate lock file — ensures provider consistency across environments
+provider = "postgresql"

@@ -1,0 +1,13 @@
+{
+  "name": "bookstore-knex-lab",
+  "private": true,
+  "scripts": {
+    "migrate:latest": "knex migrate:latest",
+    "migrate:rollback": "knex migrate:rollback"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "knex": "^3.1.0",
+    "pg": "^8.13.0"
+  }
+}

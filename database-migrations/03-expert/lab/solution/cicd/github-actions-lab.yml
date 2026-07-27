@@ -1,0 +1,35 @@
+name: Aurora Ledger — Lab Migration Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_contract:
+        type: boolean
+        default: false
+
+jobs:
+  migrate-and-verify:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: updateSQL artifact
+        run: echo "Run liquibase updateSQL and upload artifact (see examples/03-cicd-pipelines)"
+      - name: update expand+backfill
+        run: echo "liquibase update --labels=expand,backfill --contexts=staging,prod"
+      - name: verify
+        run: echo "psql -f expand-contract/verify.sql"
+
+  deploy:
+    needs: migrate-and-verify
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploy dual-compatible app"
+
+  contract:
+    needs: deploy
+    if: ${{ inputs.run_contract }}
+    runs-on: ubuntu-latest
+    environment: production-contract
+    steps:
+      - run: echo "liquibase update --labels=contract --contexts=prod"

@@ -1,0 +1,122 @@
+name: Database Migration Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'db/changelog/**'
+      - 'db/liquibase.properties'
+      - '.github/workflows/github-actions-migrate.yml'
+  workflow_dispatch:
+    inputs:
+      run_contract:
+        description: 'Also run prod contract changesets (dangerous)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Liquibase updateSQL (staging URL)
+        env:
+          LIQUIBASE_URL: ${{ secrets.STAGING_JDBC_URL }}
+          LIQUIBASE_USERNAME: ${{ secrets.STAGING_DB_USER }}
+          LIQUIBASE_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+        run: |
+          docker run --rm \
+            -v "$PWD/db:/liquibase/changelog" \
+            -e LIQUIBASE_URL -e LIQUIBASE_USERNAME -e LIQUIBASE_PASSWORD \
+            liquibase/liquibase:4.29 \
+            --changeLogFile=changelog/db.changelog-master.yaml \
+            updateSQL > liquibase-update.sql
+      - uses: actions/upload-artifact@v4
+        with:
+          name: liquibase-update-sql
+          path: liquibase-update.sql
+
+  migrate-staging:
+    needs: dry-run
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Liquibase update
+        env:
+          LIQUIBASE_URL: ${{ secrets.STAGING_JDBC_URL }}
+          LIQUIBASE_USERNAME: ${{ secrets.STAGING_DB_USER }}
+          LIQUIBASE_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+        run: |
+          docker run --rm \
+            -v "$PWD/db:/liquibase/changelog" \
+            -e LIQUIBASE_URL -e LIQUIBASE_USERNAME -e LIQUIBASE_PASSWORD \
+            liquibase/liquibase:4.29 \
+            --changeLogFile=changelog/db.changelog-master.yaml \
+            --contexts=staging,prod \
+            update
+      - name: Verification gate
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/verify.sql
+
+  deploy-app:
+    needs: migrate-staging
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Deploy application (placeholder)
+        run: echo "Deploy app revision that is dual-compatible with expanded schema"
+
+  migrate-prod-expand:
+    needs: deploy-app
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prod expand + backfill changesets
+        env:
+          LIQUIBASE_URL: ${{ secrets.PROD_JDBC_URL }}
+          LIQUIBASE_USERNAME: ${{ secrets.PROD_DB_USER }}
+          LIQUIBASE_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+        run: |
+          docker run --rm \
+            -v "$PWD/db:/liquibase/changelog" \
+            -e LIQUIBASE_URL -e LIQUIBASE_USERNAME -e LIQUIBASE_PASSWORD \
+            liquibase/liquibase:4.29 \
+            --changeLogFile=changelog/db.changelog-master.yaml \
+            --contexts=prod \
+            --labels=expand,backfill \
+            update
+      - name: Prod verification
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/verify.sql
+
+  migrate-prod-contract:
+    needs: migrate-prod-expand
+    if: ${{ inputs.run_contract == true }}
+    runs-on: ubuntu-latest
+    environment: production-contract
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prod contract (manual approval env)
+        env:
+          LIQUIBASE_URL: ${{ secrets.PROD_JDBC_URL }}
+          LIQUIBASE_USERNAME: ${{ secrets.PROD_DB_USER }}
+          LIQUIBASE_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+        run: |
+          docker run --rm \
+            -v "$PWD/db:/liquibase/changelog" \
+            -e LIQUIBASE_URL -e LIQUIBASE_USERNAME -e LIQUIBASE_PASSWORD \
+            liquibase/liquibase:4.29 \
+            --changeLogFile=changelog/db.changelog-master.yaml \
+            --contexts=prod \
+            --labels=contract \
+            update

@@ -1,0 +1,52 @@
+databaseChangeLog:
+  - changeSet:
+      id: 030-contract-drop-billing-columns
+      author: aurora.dba
+      context: prod
+      comment: Contract — only after v1 retired and backfill verified
+      preConditions:
+        - onFail: HALT
+        - tableExists:
+            tableName: account_billing_profiles
+        - sqlCheck:
+            expectedResult: 0
+            sql: |
+              SELECT COUNT(*) FROM accounts a
+              LEFT JOIN account_billing_profiles p ON p.account_id = a.id
+              WHERE p.account_id IS NULL
+              AND (
+                a.billing_address IS NOT NULL
+                OR a.billing_city IS NOT NULL
+                OR a.billing_country IS NOT NULL
+              )
+      changes:
+        - dropColumn:
+            tableName: accounts
+            columns:
+              - column:
+                  name: billing_address
+              - column:
+                  name: billing_city
+              - column:
+                  name: billing_country
+      rollback:
+        - addColumn:
+            tableName: accounts
+            columns:
+              - column:
+                  name: billing_address
+                  type: TEXT
+              - column:
+                  name: billing_city
+                  type: TEXT
+              - column:
+                  name: billing_country
+                  type: CHAR(2)
+        - sql:
+            sql: |
+              UPDATE accounts a
+              SET billing_address = p.address,
+                  billing_city = p.city,
+                  billing_country = p.country
+              FROM account_billing_profiles p
+              WHERE p.account_id = a.id;

@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - include:
+      file: changes/001-create-accounts.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/010-expand-billing-profile.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/020-backfill-billing-profile.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/030-contract-drop-billing-columns.yaml
+      relativeToChangelogFile: true

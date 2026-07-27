@@ -1,0 +1,117 @@
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+  }
+
+  environment {
+    LIQUIBASE_IMAGE = 'liquibase/liquibase:4.29'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Dry-run updateSQL') {
+      steps {
+        withCredentials([
+          usernamePassword(
+            credentialsId: 'staging-db-migrator',
+            usernameVariable: 'LIQUIBASE_USERNAME',
+            passwordVariable: 'LIQUIBASE_PASSWORD'
+          ),
+          string(credentialsId: 'staging-jdbc-url', variable: 'LIQUIBASE_URL')
+        ]) {
+          sh '''
+            docker run --rm \
+              -v "$PWD/db:/liquibase/changelog" \
+              -e LIQUIBASE_URL -e LIQUIBASE_USERNAME -e LIQUIBASE_PASSWORD \
+              $LIQUIBASE_IMAGE \
+              --changeLogFile=changelog/db.changelog-master.yaml \
+              updateSQL > liquibase-update.sql
+          '''
+        }
+        archiveArtifacts artifacts: 'liquibase-update.sql', fingerprint: true
+      }
+    }
+
+    stage('Migrate Staging') {
+      steps {
+        withCredentials([
+          usernamePassword(
+            credentialsId: 'staging-db-migrator',
+            usernameVariable: 'LIQUIBASE_USERNAME',
+            passwordVariable: 'LIQUIBASE_PASSWORD'
+          ),
+          string(credentialsId: 'staging-jdbc-url', variable: 'LIQUIBASE_URL'),
+          string(credentialsId: 'staging-database-url', variable: 'DATABASE_URL')
+        ]) {
+          sh '''
+            docker run --rm \
+              -v "$PWD/db:/liquibase/changelog" \
+              -e LIQUIBASE_URL -e LIQUIBASE_USERNAME -e LIQUIBASE_PASSWORD \
+              $LIQUIBASE_IMAGE \
+              --changeLogFile=changelog/db.changelog-master.yaml \
+              --contexts=staging,prod \
+              update
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/verify.sql
+          '''
+        }
+      }
+    }
+
+    stage('Deploy App') {
+      steps {
+        echo 'Deploy dual-compatible application build'
+      }
+    }
+
+    stage('Approve Prod Contract') {
+      when {
+        branch 'main'
+      }
+      steps {
+        input message: 'Run PRODUCTION CONTRACT changesets? Ensure v1 traffic is zero.',
+              ok: 'Contract'
+      }
+    }
+
+    stage('Prod Contract') {
+      when {
+        branch 'main'
+      }
+      steps {
+        withCredentials([
+          usernamePassword(
+            credentialsId: 'prod-db-migrator',
+            usernameVariable: 'LIQUIBASE_USERNAME',
+            passwordVariable: 'LIQUIBASE_PASSWORD'
+          ),
+          string(credentialsId: 'prod-jdbc-url', variable: 'LIQUIBASE_URL')
+        ]) {
+          sh '''
+            docker run --rm \
+              -v "$PWD/db:/liquibase/changelog" \
+              -e LIQUIBASE_URL -e LIQUIBASE_USERNAME -e LIQUIBASE_PASSWORD \
+              $LIQUIBASE_IMAGE \
+              --changeLogFile=changelog/db.changelog-master.yaml \
+              --contexts=prod \
+              --labels=contract \
+              update
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    failure {
+      echo 'ABORT: do not promote traffic. Follow RUNBOOK for mid-flight migration failure.'
+    }
+  }
+}
