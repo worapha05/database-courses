@@ -1,0 +1,24 @@
+{
+  "name": "nosql-caching-bootcamp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero to Expert bootcamp for MongoDB and Redis",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "beginner:mongo": "node 01-beginner/examples/02-mongodb-crud/crud.js",
+    "beginner:redis": "node 01-beginner/examples/03-redis-strings-ttl/strings.js",
+    "intermediate:agg": "node 02-intermediate/examples/01-mongodb-aggregation/aggregation.js",
+    "intermediate:cache": "node 02-intermediate/examples/03-caching-patterns/cache-aside.js",
+    "expert:resilience": "node 03-expert/examples/01-cache-resilience/stampede.js",
+    "expert:indexes": "node 03-expert/examples/02-mongodb-indexing/indexes.js"
+  },
+  "dependencies": {
+    "ioredis": "^5.4.2",
+    "mongodb": "^6.12.0"
+  }
+}

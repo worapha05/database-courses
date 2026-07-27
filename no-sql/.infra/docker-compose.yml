@@ -1,0 +1,129 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: nosql-bootcamp-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: bootcamp
+      MONGO_INITDB_ROOT_PASSWORD: bootcamp
+      MONGO_INITDB_DATABASE: bootcamp
+    entrypoint:
+      - bash
+      - -c
+      - |
+        cp /run/secrets/mongo-keyfile /tmp/mongo-keyfile
+        chmod 400 /tmp/mongo-keyfile
+        chown mongodb:mongodb /tmp/mongo-keyfile
+        exec docker-entrypoint.sh mongod --replSet rs0 --bind_ip_all --keyFile /tmp/mongo-keyfile
+    volumes:
+      - mongo_data:/data/db
+      - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - ./docker/mongo-keyfile:/run/secrets/mongo-keyfile:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "-u",
+          "bootcamp",
+          "-p",
+          "bootcamp",
+          "--authenticationDatabase",
+          "admin",
+          "--eval",
+          "db.adminCommand('ping').ok && rs.status().ok",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  mongo-rs-init:
+    image: mongo:7
+    container_name: nosql-bootcamp-mongo-rs-init
+    depends_on:
+      - mongo
+    restart: "no"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        echo "Waiting for mongod..."
+        for i in $$(seq 1 40); do
+          if mongosh --host mongo:27017 -u bootcamp -p bootcamp \
+            --authenticationDatabase admin \
+            --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep -q 1; then
+            break
+          fi
+          sleep 2
+        done
+        mongosh --host mongo:27017 -u bootcamp -p bootcamp \
+          --authenticationDatabase admin --quiet --eval '
+          try {
+            const s = rs.status();
+            print("replica set already initialized: " + s.set);
+          } catch (e) {
+            print("initiating replica set rs0...");
+            rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "mongo:27017" }] });
+          }
+        '
+        echo "Waiting for PRIMARY..."
+        for i in $$(seq 1 40); do
+          STATE=$$(mongosh --host mongo:27017 -u bootcamp -p bootcamp \
+            --authenticationDatabase admin \
+            --quiet --eval 'try { rs.status().myState } catch(e) { 0 }')
+          if [ "$$STATE" = "1" ]; then
+            echo "PRIMARY ready"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "replica set init timed out" >&2
+        exit 1
+
+  redis:
+    image: redis:7-alpine
+    container_name: nosql-bootcamp-redis
+    ports:
+      - "6379:6379"
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--maxmemory",
+        "256mb",
+        "--maxmemory-policy",
+        "allkeys-lru",
+      ]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: nosql-bootcamp-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: bootcamp
+      ME_CONFIG_MONGODB_ADMINPASSWORD: bootcamp
+      ME_CONFIG_MONGODB_URL: >-
+        mongodb://bootcamp:bootcamp@mongo:27017/?replicaSet=rs0&directConnection=true
+      ME_CONFIG_BASICAUTH_USERNAME: bootcamp
+      ME_CONFIG_BASICAUTH_PASSWORD: bootcamp
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mongo-rs-init:
+        condition: service_completed_successfully
+
+volumes:
+  mongo_data:
+  redis_data:
