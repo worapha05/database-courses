@@ -1,3 +1,7 @@
+📍 **Nav:** [`🏠 Dev Learning Courses Hub`](https://github.com/worapha05/dev-learning-courses-hub/blob/main/README.md) | [`📂 Database Courses Index`](../README.md) | 📝 [`Prompt File`](https://github.com/worapha05/ai-learning-prompts-hub/blob/main/course-generation/database-courses/database-migrations-prompt.md)
+
+---
+
 # Database Migrations Bootcamp — Zero to Expert
 
 bootcamp เรียนรู้ **Database Migrations & Schema Evolution** แบบครบวงจร เน้น **Prisma Migrate**,
